@@ -3,8 +3,10 @@ package encryption
 import (
 	"ebc_analyzer/util/convert"
 	"ebc_analyzer/util/ui/message"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 
 	"encoding/base64"
 	"net/url"
@@ -22,9 +24,10 @@ type ECBType struct {
 	ECBRepeatBlock  []byte
 	EncryptionKey   []int
 	ecbKey          []string
+	BlockSize       string
 }
 
-func ECB(unencryptedData string, encryptedData string, ecbCrack bool) *ECBType {
+func ECB(unencryptedData string, encryptedData string, blockSize string, ecbCrack bool) *ECBType {
 	urlDecoded, _ := url.QueryUnescape(encryptedData)
 	b64Decoded, _ := base64.RawStdEncoding.DecodeString(urlDecoded)
 	decValues := convert.B64ToDec(b64Decoded)
@@ -38,32 +41,70 @@ func ECB(unencryptedData string, encryptedData string, ecbCrack bool) *ECBType {
 		UnencryptedData: unencryptedData,
 		EncryptedData:   encryptedData,
 		ECBCrack:        ecbCrack,
+		BlockSize:       blockSize,
 	}
 }
 
 func (c *ECBType) CrackECB() (*ECBType, error) {
-	var repeatBlock []byte
+
 	message.Println(message.Info, 0, "Finding repeated blocks in ECB encrypted string\n")
-	fmt.Println(c.ByteValues)
-	for idx, dec := range c.ByteValues {
-		if idx == 0 {
-			repeatBlock = append(repeatBlock, byte(dec))
-		} else {
-			if byte(dec) == repeatBlock[0] {
-				checkRepeat := c.ByteValues[idx : idx+len(repeatBlock)]
-				if reflect.DeepEqual(repeatBlock, checkRepeat) {
-					message.Println(message.Success, 1, "Found repeat block: %v\n", repeatBlock)
-					c.ECBRepeatBlock = repeatBlock
-					c.CalculateECBKey()
-					break
-				}
+
+	blockSize := 0
+	repeatBlock := []byte{}
+
+	if c.BlockSize == "auto" {
+
+		for idx, dec := range c.ByteValues {
+			if idx == 0 {
+				repeatBlock = append(repeatBlock, byte(dec))
 			} else {
-				repeatBlock = append(repeatBlock, dec)
+				if byte(dec) == repeatBlock[0] {
+					checkRepeat := c.ByteValues[idx : idx+len(repeatBlock)]
+					if reflect.DeepEqual(repeatBlock, checkRepeat) {
+						message.Println(message.Success, 1, "Found repeat block: %v\n", repeatBlock)
+						c.ECBRepeatBlock = repeatBlock
+						c.CalculateECBKey()
+						break
+					}
+				} else {
+					repeatBlock = append(repeatBlock, dec)
+				}
 			}
 		}
+
+	} else {
+
+		var err error
+		blockSize, err = strconv.Atoi(string(c.BlockSize))
+		if err != nil || blockSize <= 0 {
+			return nil, errors.New("Invalid block size")
+		}
+
+		for idx, dec := range c.ByteValues {
+			if idx%blockSize == 0 {
+				repeatBlock = append(repeatBlock[:0], byte(dec))
+			} else {
+				if byte(dec) == repeatBlock[idx%blockSize] {
+					checkRepeat := c.ByteValues[idx-blockSize : idx]
+					if reflect.DeepEqual(repeatBlock, checkRepeat) {
+						message.Println(message.Success, 1, "Found repeat block: %v\n", repeatBlock)
+						c.ECBRepeatBlock = repeatBlock
+						c.CalculateECBKey()
+						break
+					}
+				} else {
+					repeatBlock = append(repeatBlock, dec)
+				}
+			}
+		}
+
 	}
 
-	return &ECBType{}, nil
+	if len(c.ECBRepeatBlock) != 0 {
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf("No repeated blocks found")
 }
 
 func (c *ECBType) CalculateECBKey() ([]string, error) {

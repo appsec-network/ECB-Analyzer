@@ -10,24 +10,45 @@ import (
 	"github.com/alexflint/go-arg"
 )
 
-type ECBBlockData struct {
+type BlockData struct {
 	Unecrypted string
 	Encrypted  string
 }
 
+type BlockSize string
+
 type AppArgs struct {
-	Action    string       `arg:"-a,--action,required" help:"ECB Attack Types."`
-	BlockData ECBBlockData `arg:"-b,--block-data,required" help:"Block data."`
+	Action    string    `arg:"-a,--action,required" help:"ECB Attack Types."`
+	BlockData BlockData `arg:"-d,--block-data,required" help:"Block data."`
+	BlockSize BlockSize `arg:"-s,--block-size" default:"auto" help:"Block Size: 8, 16, 32, 64 or auto."`
+	Verbose   bool      `arg:"-v,--verbose" help:"verbosity level"`
 }
 
-func (e *ECBBlockData) UnmarshalText(text []byte) error {
+func (d *BlockData) UnmarshalText(text []byte) error {
+
 	parts := strings.Split(string(text), ":")
 	if len(parts) != 2 {
-		return fmt.Errorf("Hatalı format: -e aaaaaaa:bbbbbb")
+		return fmt.Errorf("Incorrect format: -d sample:c2FtcGxl")
 	}
-	e.Unecrypted = parts[0]
-	e.Encrypted = parts[1]
+	d.Unecrypted = parts[0]
+	d.Encrypted = parts[1]
+
 	return nil
+}
+
+func (bs *BlockSize) UnmarshalText(text []byte) error {
+
+	validSizes := []string{"8", "16", "32", "64", "auto"}
+	inputSize := string(text)
+
+	for _, size := range validSizes {
+		if size == inputSize {
+			*bs = BlockSize(inputSize)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Invalid block size: %s", inputSize)
 }
 
 var (
@@ -38,10 +59,6 @@ func main() {
 
 	header.DisplayFigure()
 
-	//7z%2BGu21W2Yi91LAZ1eB8zQ%3D%3D
-	//9KG7Vr4LWlpOzvGerl%2BhDbcp%2BiE3K5pw
-	//9KG7Vr4LWlr0obtWvgtaWriOhN4BFFJD8Y082QkoxF4%3D
-
 	arg.MustParse(&args)
 
 	switch args.Action {
@@ -49,7 +66,7 @@ func main() {
 
 		message.Println(message.Warning, 0, "Selected action : crack\n")
 
-		_, err := analyzer.ProcessCracking(args.BlockData.Unecrypted, args.BlockData.Encrypted)
+		_, err := analyzer.ProcessCracking(args.BlockData.Unecrypted, args.BlockData.Encrypted, string(args.BlockSize))
 		if err != nil {
 			message.Println(message.Error, 0, err.Error())
 		}

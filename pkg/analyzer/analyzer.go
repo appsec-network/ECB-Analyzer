@@ -10,17 +10,16 @@ type Result struct {
 	IsSuccess bool
 }
 
-func ProcessCracking(unecryptedData string, encryptedData string) (*Result, error) {
+func ProcessCracking(unecryptedData string, encryptedData string, blockSize string) (*Result, error) {
 
 	if strings.TrimSpace(unecryptedData) == "" || strings.TrimSpace(encryptedData) == "" {
 		return &Result{}, fmt.Errorf("Invalid encypted/unecrypted data.")
 	}
 
-	ecb := encryption.ECB(unecryptedData, encryptedData, true)
+	ecb := encryption.ECB(unecryptedData, encryptedData, blockSize, true)
 	_, err := ecb.CrackECB()
 
 	if err != nil {
-		fmt.Println(err)
 		return &Result{
 			IsSuccess: false,
 		}, err
